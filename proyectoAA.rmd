@@ -36,8 +36,8 @@ Como primer paso para abordar el problema, leeremos los datos y los dividiremos 
 Procedemos a la lectura de la base de datos de clasificación 'South African Heart Disease'. \newline
 
 ```{r}
-datos_sudafrica = read.csv("./datos/africa.data")
-head(datos_sudafrica)
+datos_housing = read_delim("~/Documents/Universidad/3_carrera/2_CUATRIMESTRE/AA/PRACTICAS/proyecto/datos/housing.data"," ", escape_double = FALSE, trim_ws = TRUE)
+head(datos_housing)
 ```
 
 Si analizamos los datos obtenidos, podemos observar que existe un atributo, 'row.names', que actúa como clave primaria, es decir, como identificador, así que dicho atributo nos es inútil para el aprendizaje de un modelo lineal, y por tanto lo suprimimos:
