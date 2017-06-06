@@ -17,6 +17,7 @@ library("AppliedPredictiveModeling")
 library("caret")
 library("leaps")
 library("glmnet")
+library("readr")
 
 ```
 \newpage
@@ -36,8 +37,9 @@ Como primer paso para abordar el problema, leeremos los datos y los dividiremos 
 Procedemos a la lectura de la base de datos de clasificación 'South African Heart Disease'. \newline
 
 ```{r}
-datos_housing = read_csv("datos/housing.data")
+datos_housing = read_csv("./datos/housing.data")
 head(datos_housing)
+datos_housing = as.data.frame(datos_housing)
 ```
 
 
