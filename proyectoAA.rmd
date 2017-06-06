@@ -37,9 +37,8 @@ Como primer paso para abordar el problema, leeremos los datos y los dividiremos 
 Procedemos a la lectura de la base de datos de clasificación 'South African Heart Disease'. \newline
 
 ```{r}
-datos_housing = read_csv("./datos/housing.data")
+datos_housing = as.data.frame( read_csv("datos/housing.data"))
 head(datos_housing)
-datos_housing = as.data.frame(datos_housing)
 ```
 
 
@@ -74,8 +73,7 @@ PCA calcula la varianza de cada atributo respecto a los demás, de forma que aqu
 Además, para no arriesgar mucho (puesto que PCA trabaja "a ciegas") representaremos sólo aquellos componentes que expliquen hasta el 90% de la variabilidad de los datos (es necesario que los datos estén escalados y centrados para aplicar PCA):
 
 ```{r}
-housingTrans = preProcess(datos_housing, method = c("BoxCox", "center", "scale", "pca"),
-                            thresh = 0.9)
+housingTrans = preProcess(datos_housing[,-which(names(datos_housing) == "MEDV")], method = c("BoxCox", "center", "scale", "pca"), thresh = 0.9)
 housingTrans$rotation
 ```
 Como podemos observar en la tabla, se han reducido los atributos a 8 atributos (combinaciones lineales de los 10 anteriores).
