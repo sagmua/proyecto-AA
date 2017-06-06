@@ -154,93 +154,99 @@ Como podemos comprobar, las desviaciones obtenidas empleando o no regularizació
 
 ###Definición de modelos
 
-Para empezar, calculamos un sencillo modelo lineal con el que intentamos predecir 'MEDV' (nuestras etiquetas) a partir del atributo más representativo, en nuestro caso y como hemos comprobado, 'age'.\newline
+Para la realización de los modelos planteamos emplear regresión logística mediante la función 'glm'; pero si empleamos regresión logística obtendremos un conjunto de probabilidades que predigan los valores. Para ello, como precondición sería necesario normalizar los valores de la variable respuesta de forma que se encontraran en el intervalo [0,1].
 
-```{r}
-m_muestra_housing = lm(MEDV ~ age, data=housing_train)
-```
+Entonces procederemos a generar modelos mediante regresión lineal, así obtendremos un valor dependiendo de la distancia de los atributos a la recta generada.
 
-Para el cálculo del error, y a fin de intentar aportar un punto de generalización al problema a abordar, definimos una función que calcula el error (porcentaje de etiquetas mal clasificadas en función de etiquetas totales) y muestra la matriz de confusión en el conjunto de test a partir de un modelo:
+Antes definimos una función para el cálculo del error. Para ello realizamos un cálculo de la media de errores normalizados en un intervalo. Se realiza el cociente entre la resta de las variables respuesta reales menos las predichas, y la diferencia entre el valor máximo y mínimo de las variables respuesta:
 
-```{r errorEtiquetas}
-calculoErrorMatrizConfusion  = function (modelo, test, etiquetas, imprimir_matriz=TRUE){
-  # Una vez calculado el modelo, empleamos la función predict
-  # para obtener la probabilidad de cada etiqueta.
-  prob_test = predict(modelo, test[,-which(names(test) == etiquetas)], type="response")
+```{r calculoErrorMedioIntervalo1}
 
-  pred_test = rep(0, length(prob_test))
-   # predicciones por defecto 0
-  pred_test[prob_test >=0.5] = 1
-   # >= 0.5 clase 1
-  matriz_conf = table(pred_test, test[,which(names(test) == etiquetas)])
-  if (imprimir_matriz)
-    print(matriz_conf)
+calculoErrorMedioIntervalo  = function (modelo, test, variable_respuesta){
+  prob_test = predict(modelo, test[,-which(names(test) == variable_respuesta)])
 
-  etest = mean(pred_test != test[,which(names(test) == etiquetas)])
+  etest = mean(abs(prob_test - test[,which(names(test) == variable_respuesta)])/(max(test$MEDV)-min(test$MEDV)))
+
 }
 ```
 
 Utilizamos nuestra función para calcular el error del modelo de muestra generado anteriormente:
 
 ```{r}
-etest_mmuestrasud = calculoErrorMatrizConfusion(m_muestra_housing, housing_test, "MEDV")
+etest_mmuestrasud = calculoErrorMedioIntervalo(m_muestra_housing, housing_test, "MEDV")
 etest_mmuestrasud
 ```
 Obtenemos un error de 0.337, pero se trata de un modelo excesivamente simple como para reflejar buenos resultados en un problema real. Por tanto busquemos un modelo diferente empleando otra carasterística, la siguiente más representativa en el conjunto de datos, que en nuestro caso es 'famhist':
 
 ```{r}
-m1_housing = lm(MEDV ~ age + famhist, data=housing_train)
+m1_housing = lm(MEDV ~ LSTAT + PTRATIO, data=housing_train)
 
-etest_m1sud = calculoErrorMatrizConfusion(m1_housing, housing_test, "MEDV")
+etest_m1sud = calculoErrorMedioIntervalo(m1_housing, housing_test, "MEDV")
 etest_m1sud
 ```
 
 Utilizando dos características el error en el conjunto de test desciende hasta un 0.326. Seguimos probando nuevos modelos, así que añadimos la siguiente característica recomendada por regsubsets, 'tobacco':
 
 ```{r}
-m2_housing = lm(MEDV ~ age + famhist + tobacco, data=housing_train)
+m2_housing = lm(MEDV ~ LSTAT+ RM+ PTRATIO, data=housing_train)
 
-etest_m2sud = calculoErrorMatrizConfusion(m2_housing, housing_test, "MEDV")
+etest_m2sud = calculoErrorMedioIntervalo(m2_housing, housing_test, "MEDV")
 etest_m2sud
 ```
+
+
+
 
 Un error reflejado de 0.293 ya se acerca más a lo que buscamos, poco a poco vamos avanzando hacia un error menor en el conjunto de validación. Como aún nos queda una buena cantidad de características por probar, añadimos una más al siguiente modelo, 'ldl':
 
 ```{r}
-m3_housing = lm(MEDV ~ age + famhist + tobacco + ldl, data=housing_train)
+m3_housing = lm( MEDV ~ LSTAT+ RM+ PTRATIO + DIS, data=housing_train)
 
-etest_m3sud = calculoErrorMatrizConfusion(m3_housing, housing_test, "MEDV")
+etest_m3sud = calculoErrorMedioIntervalo(m3_housing, housing_test, "MEDV")
 etest_m3sud
 ```
 
 En esta ocasión tenemos un error de 0.261, que mejora sustancialmente al que teníamos antes. Probemos con la siguiente característica, 'typea':
 
 ```{r}
-m4_housing = lm(MEDV ~ age + famhist + tobacco + ldl + typea, data=housing_train)
+m4_housing = lm(MEDV ~ LSTAT+ RM+ PTRATIO + DIS + NOX, data=housing_train)
 
-etest_m4sud = calculoErrorMatrizConfusion(m4_housing, housing_test, "MEDV")
+etest_m4sud = calculoErrorMedioIntervalo(m4_housing, housing_test, "MEDV")
 etest_m4sud
 ```
-
+------------AQUI HAY SOBREAJUSTE---------------
 El error se reduce a 0.25, lo podemos empezar a considerar un error aceptable. No obstante, sigamos probando a añadir la siguiente característica según regsubsets, 'obesity':
 
 ```{r}
-m5_housing = lm(MEDV ~ age + famhist + tobacco + ldl + typea + obesity, data=housing_train)
+m5_housing = lm( MEDV ~ LSTAT+ I(RM^2)+ PTRATIO + DIS, data=housing_train)
 
-etest_m5sud = calculoErrorMatrizConfusion(m5_housing, housing_test, "MEDV")
+etest_m5sud = calculoErrorMedioIntervalo(m5_housing, housing_test, "MEDV")
 etest_m5sud
 ```
 
 Aquí encontramos el primer bache, y es que aumentando el número de características empeoramos el error en el test. Seguramente sea debido a sobreajuste, pero para asegurarnos vamos a sustituir 'obesity' por el siguiente atributo más válido según regsubsets, 'sbp':
 
 ```{r}
-m6_housing = lm(MEDV ~ age + famhist + tobacco + ldl + typea + sbp, data=housing_train)
+m6_housing = lm( MEDV ~ LSTAT* RM* PTRATIO * DIS, data=housing_train)
 
-etest_m6sud = calculoErrorMatrizConfusion(m6_housing, housing_test, "MEDV")
+etest_m6sud = calculoErrorMedioIntervalo(m6_housing, housing_test, "MEDV")
 etest_m6sud
 ```
 
 Efectivamente, seguimos encontrando errores peores, por lo que abandonamos esta línea de exploración al estar enfrentándonos a una base de datos no lineal. Para mejorar el error hemos realizado diferentes transformaciones no lineales sobre los atributos seleccionados como más representativos.\newline
+
+
+###MODELOS NO LINEALES:
+
+Comenzamos a aplicar modelos:
+
+####REDES NEURONALES:
+```{r}
+
+```
+
+
+
 
 Volvemos al modelo en el que menor error obtuvimos, el formado por los 5 mejores atributos según regsubsets, y probamos a utilizar una variable cuadrática, en este caso elevar al cuadrado la característica 'age':
 
