@@ -19,6 +19,7 @@ library("leaps")
 library("glmnet")
 library("readr")
 library("ModelMetrics")
+library("neuralnet")
 
 ```
 \newpage
@@ -266,9 +267,9 @@ crossValidationNN = function(datos, capas){
     }
     
     
-
+    n = names(train_)
     f = as.formula(paste("MEDV ~", paste(n[!n %in% "MEDV"], collapse = " + ")))
-    nn = neuralnet(f,data=train_,hidden=c(5,3),linear.output=T)
+    nn = neuralnet(f,data=train_,hidden=capas,linear.output=T)
     
     
     
@@ -286,7 +287,29 @@ crossValidationNN = function(datos, capas){
   mean(errores)
 }
 
-t=crossValidationNN(datos_housing,c(5,3))
+eout_nn_1_5=crossValidationNN(datos_housing,5)
+eout_nn_1_5
+eout_nn_1_3=crossValidationNN(datos_housing,3)
+eout_nn_1_3
+eout_nn_2_53=crossValidationNN(datos_housing,c(5,3))
+eout_nn_2_53
+eout_nn_2_74=crossValidationNN(datos_housing,c(7,4))
+eout_nn_2_74
+eout_nn_3_853=crossValidationNN(datos_housing,c(8,5,3))
+eout_nn_3_853
+eout_nn_3_742=crossValidationNN(datos_housing,c(7,4,2))
+eout_nn_3_742
+```
+
+```{r}
+maxs = apply(datos_housing, 2, max) 
+mins = apply(datos_housing, 2, min)
+datos_escalados = as.data.frame(scale(datos_housing, center = mins, scale = maxs - mins))
+housing_train_esc = datos_escalados[train,]
+n = names(housing_train_esc)
+f = as.formula(paste("MEDV ~", paste(n[!n %in% "MEDV"], collapse = " + ")))
+nn_winner = neuralnet(f,data=housing_train_esc,hidden=c(7,4,2),linear.output=T)
+plot(nn_winner)
 ```
 
 
