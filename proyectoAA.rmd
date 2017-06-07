@@ -18,6 +18,7 @@ library("caret")
 library("leaps")
 library("glmnet")
 library("readr")
+library("ModelMetrics")
 
 ```
 \newpage
@@ -169,6 +170,7 @@ Antes definimos una función para el cálculo del error. Para ello realizamos un
 calculoErrorMedioIntervalo  = function (modelo, test, variable_respuesta){
   prob_test = predict(modelo, test[,-which(names(test) == variable_respuesta)])
 
+  print(mse(test[,which(names(test) == variable_respuesta)], prob_test))
   etest = mean(abs(prob_test - test[,which(names(test) == variable_respuesta)])/(max(test$MEDV)-min(test$MEDV)))
 
 }
@@ -247,7 +249,7 @@ Comenzamos a aplicar modelos:
 Para ello aplicamos validación cruzada generando redes neuronales de forma que estimemos así que parámetros producen un mejor error. Validación cruazada con 10 fold:
 ####REDES NEURONALES:
 ```{r}
-estimarCapasOcultas = function(datos, capas){
+crossValidationNN = function(datos, capas){
   maxs = apply(datos, 2, max) 
   mins = apply(datos, 2, min)
   datos = as.data.frame(scale(datos, center = mins, scale = maxs - mins))
@@ -284,7 +286,7 @@ estimarCapasOcultas = function(datos, capas){
   mean(errores)
 }
 
-t=estimarCapasOcultas(datos_housing,c(5,3))
+t=crossValidationNN(datos_housing,c(5,3))
 ```
 
 
