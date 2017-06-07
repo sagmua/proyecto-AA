@@ -20,6 +20,7 @@ library("glmnet")
 library("readr")
 library("ModelMetrics")
 library("neuralnet")
+library("e1071")
 
 ```
 \newpage
@@ -311,6 +312,26 @@ f = as.formula(paste("MEDV ~", paste(n[!n %in% "MEDV"], collapse = " + ")))
 nn_winner = neuralnet(f,data=housing_train_esc,hidden=c(7,4,2),linear.output=T)
 plot(nn_winner)
 ```
+
+####SUPPORT VECTOR MACHINE
+
+
+Trataremos de ajustar los parámetros para encontrar el mejor valor para cada uno y dar así con un modelo mejor.
+
+```{r}
+tune_housing = tune(svm, MEDV ~ ., data=housing_train, ranges = list(gamma=seq(0,1,0.01)))
+tune_housing
+```
+
+```{r}
+svm_housing = svm(MEDV ~ ., data=housing_train, kernel="radial", gamma=0.05)
+ 
+pred_svm = predict(svm_housing, housing_test)
+ 
+mse(housing_test$MEDV, pred_svm)
+```
+
+
 
 
 El error no es malo pero sigue siendo un peor modelo que el mejor que hemos generado ahora mismo. Hemos comprobado también que es contraproducente realizar transformaciones con logaritmos y raíces debido a la cantidad de datos negativos que tiene la base de datos una vez normalizada.
