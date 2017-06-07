@@ -244,9 +244,47 @@ Efectivamente, seguimos encontrando errores peores, por lo que abandonamos esta 
 
 Comenzamos a aplicar modelos:
 
+Para ello aplicamos validación cruzada generando redes neuronales de forma que estimemos así que parámetros producen un mejor error. Validación cruazada con 10 fold:
 ####REDES NEURONALES:
 ```{r}
+estimarCapasOcultas = function(datos, capas){
+  maxs = apply(datos, 2, max) 
+  mins = apply(datos, 2, min)
+  datos = as.data.frame(scale(datos, center = mins, scale = maxs - mins))
+  set.seed(6)
+  #realizamos 5 particiones:
+  folds = split(datos, sample(rep(1:5, nrow(datos)/5)))
+  errores = as.numeric()
+  for (i in 1:5){
+    test_ = folds[[i]]
+    train_ = data.frame()
+    for (j in 1:5){
+      if(j!=i)
+        train_ = rbind(train_, folds[[j]])
+    }
+    
+    
 
+    f = as.formula(paste("MEDV ~", paste(n[!n %in% "MEDV"], collapse = " + ")))
+    nn = neuralnet(f,data=train_,hidden=c(5,3),linear.output=T)
+    
+    
+    
+    pr.nn = compute(nn,test_[,1:13])
+    
+    pr.nn_ = pr.nn$net.result*(max(datos_housing$MEDV)-min(datos_housing$MEDV))+min(datos_housing$MEDV)
+    test.r = (test_$MEDV)*(max(datos_housing$MEDV)-min(datos_housing$MEDV))+min(datos_housing$MEDV)
+    
+    MSE.nn = sum((test.r - pr.nn_)^2)/nrow(test_)
+
+    errores = c(errores, MSE.nn)
+
+  }
+  
+  mean(errores)
+}
+
+t=estimarCapasOcultas(datos_housing,c(5,3))
 ```
 
 
