@@ -21,6 +21,7 @@ library("readr")
 library("ModelMetrics")
 library("neuralnet")
 library("e1071")
+library("gbm")
 
 ```
 \newpage
@@ -319,8 +320,8 @@ plot(nn_winner)
 Trataremos de ajustar los parámetros para encontrar el mejor valor para cada uno y dar así con un modelo mejor.
 
 ```{r}
-tune_housing = tune(svm, MEDV ~ ., data=housing_train, ranges = list(gamma=seq(0,1,0.01)))
-tune_housing
+tune_gamma_svm = tune(svm, MEDV ~ ., data=housing_train, ranges = list(gamma=seq(0,1,0.01)))
+tune_gamma_svm
 ```
 
 ```{r}
@@ -331,7 +332,23 @@ pred_svm = predict(svm_housing, housing_test)
 mse(housing_test$MEDV, pred_svm)
 ```
 
+####BOOSTING
 
+```{r}
+grid_gbm = expand.grid(.interaction.depth = (1:5)*2, .n.trees = (1:10)*25, .shrinkage = .1, .n.minobsinnode = .1)
+
+bootControl = trainControl(number = 200)
+gmb_housing = train(housing_train[,1:13], housing_train[,14], method="gbm", trControl = bootControl, verbose=F, bag.fraction = 1, tuneGrid = grid_gbm)
+```
+
+```{r}
+set.seed(90)
+boosting_housing = gbm(MEDV ~ ., data = housing_train, n.trees = 200, interaction.depth = 6, shrinkage = 0.1, n.minobsinnode = 0.1)
+
+pred_boosting = predict(boosting_housing, housing_test, n.trees = 200, interaction.depth = 6, shrinkage = 0.1, n.minobsinnode = 0.1)
+
+mse(housing_test$MEDV, pred_boosting)
+```
 
 
 El error no es malo pero sigue siendo un peor modelo que el mejor que hemos generado ahora mismo. Hemos comprobado también que es contraproducente realizar transformaciones con logaritmos y raíces debido a la cantidad de datos negativos que tiene la base de datos una vez normalizada.
