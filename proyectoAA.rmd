@@ -22,6 +22,7 @@ library("ModelMetrics")
 library("neuralnet")
 library("e1071")
 library("gbm")
+library("randomForest")
 
 ```
 \newpage
@@ -320,12 +321,12 @@ plot(nn_winner)
 Trataremos de ajustar los parámetros para encontrar el mejor valor para cada uno y dar así con un modelo mejor.
 
 ```{r}
-tune_gamma_svm = tune(svm, MEDV ~ ., data=housing_train, ranges = list(gamma=seq(0,1,0.01)))
+tune_gamma_svm = tune(svm, MEDV ~ ., data=housing_train, ranges = list(gamma=seq(0,1,0.01)), cost = 2^(2:9))
 tune_gamma_svm
 ```
 
 ```{r}
-svm_housing = svm(MEDV ~ ., data=housing_train, kernel="radial", gamma=0.05)
+svm_housing = svm(MEDV ~ ., data=housing_train, kernel="radial", gamma=0.08)
  
 pred_svm = predict(svm_housing, housing_test)
  
@@ -342,7 +343,7 @@ gmb_housing = train(housing_train[,1:13], housing_train[,14], method="gbm", trCo
 ```
 
 ```{r}
-set.seed(90)
+set.seed(7)
 boosting_housing = gbm(MEDV ~ ., data = housing_train, n.trees = 200, interaction.depth = 6, shrinkage = 0.1, n.minobsinnode = 0.1)
 
 pred_boosting = predict(boosting_housing, housing_test, n.trees = 200, interaction.depth = 6, shrinkage = 0.1, n.minobsinnode = 0.1)
@@ -350,6 +351,28 @@ pred_boosting = predict(boosting_housing, housing_test, n.trees = 200, interacti
 mse(housing_test$MEDV, pred_boosting)
 ```
 
+```{r}
+m = ncol(housing_train)/3
+set.seed(6)
+rf_housing = randomForest(MEDV ~ ., housing_train, ntree=500, mtry=m)
+print(rf_housing)
+plot(rf_housing)
+```
+
+```{r}
+m = ncol(housing_train)/3
+set.seed(6)
+rf_housing = randomForest(MEDV ~ ., housing_train, ntree=100, mtry=m)
+prob_rf = predict(rf_housing,housing_test[,-which(names(housing_test) == "MEDV")])
+mse(housing_test$MEDV, prob_rf)
+print(rf_housing)
+plot(rf_housing)
+```
+
+```{r}
+head(housing_test$MEDV)
+head(prob_rf)
+```
 
 El error no es malo pero sigue siendo un peor modelo que el mejor que hemos generado ahora mismo. Hemos comprobado también que es contraproducente realizar transformaciones con logaritmos y raíces debido a la cantidad de datos negativos que tiene la base de datos una vez normalizada.
 
