@@ -29,7 +29,9 @@ library("randomForest")
 \newpage
 
 ##Introducción:
-Para la realización de esta práctica obtendremos el ajuste de un modelo lineal y de varios no lineales enfrentándonos a un problema de regresión "Housing Data Set", obtenido del repositorio de la UCI.
+El objetivo de esta práctica consistirá en realizar una serie de modelos y observar que cada uno ofrece una solución diferente en base a los datos de los que disponemos. Centraremos nuestro estudio en cuatro modelos no lineales, pero compararemos también junto a ellos el mejor modelo lineal que seamos capaces de estimar.
+
+Para cada uno de los modelos trataremos de encontrar los parámetros que mejor lo ajustan para nuestro problema, y de explicar por qué cada uno se comporta de forma diferente. Como conclusión final nos quedaremos con el modelo que nos dé un mejor ajuste y explicaremos por qué.
 
 ##"Housing Data Set"
 En este caso nos encontramos frente a un problema de regresión, tal y como hemos visto anteriormente. Se trata de un conjunto de datos que estima el valor de distintas viviendas en los suburbios de Boston, basándose en algunas características como el crimen per capita, la accesibilidad a autopistas radiales, etc.
@@ -256,15 +258,14 @@ Definiremos cuatro modelos no lineales con los que comparar el mejor modelo line
 
 ###REDES NEURONALES:
 
-Comenzaremos abordando las redes neuronales.
-
-Para realizar modelos de redes neuronales utilizaremos el paquete "neuralnet", que nos aporta una función para el estudio de estos modelos.
+Comenzaremos abordando las redes neuronales. Para realizar modelos de redes neuronales utilizaremos el paquete "neuralnet", que nos aporta una función para el estudio de estos modelos.
 
 Para la estimación de los parámetros a obtener, tal como se especifica en el guión, emplearemos validación cruzada para estimar el $E_{out}$. En nuestro caso vamos a dividir nuestro conjunto de entrenamiento en 5 particinoes y en cada iteración validaremos con una habiendo entrenado con las 4 restantes. Esto se denomina 5-fold-cross-validation.
 
 Hemos diseñado una función que realiza los cálculos pertinentes para un conjunto de datos dado y una arquitectura de la red neuronal. El objetivo será llamar a la función con distintas arquitecturas con 1, 2 y 3 capas ocultas y con distintas unidades en cada una de ellas, y finalmente encontrar cuál ofrece un error más reducido. Los pesos se inicializarán a valores aleatorios siguiendo una distribución normal si no se especifica un vector inicial.
 
 En primer lugar, para que la red neuronal tenga éxito, escalaremos y centraremos los datos independientemente de las transformaciones realizadas anteriormente. El objetivo es normalizar los valores, incluyendo la variable respuesta en este caso. Con estos datos podremos construir nuestra red neuronal, pero a continuación será necesario "desnormalizar" los valores obtenidos para que el error sea comparable al resto de errores obtenidos en la práctica. [1]
+
 
 ```{r}
 crossValidationNN = function(datos, capas){
@@ -330,24 +331,57 @@ nn_winner = neuralnet(f,data=housing_train_esc,hidden=c(7,4,2),linear.output=T)
 plot(nn_winner)
 ```
 
+Debido a un error que no hemos sido capaces de solucionar, la función plot no nos muestra en este caso la figura que debe mostrar en el PDF. Sin embargo, como al ejecutar el código R sí muestra una gráfica, se la adjuntamos en "Anexo1.png" dentro del fichero zip donde entregamos la práctica.
+
 ###SUPPORT VECTOR MACHINE
 
-El siguiente modelo a tratar será SVM (Support Vector Machine). Este modelo trata de estimar un clasificador que pueda separar los datos con el máximo margen, para que nuevos datos puedan ser
+El siguiente modelo a tratar será SVM (Support Vector Machine). Este modelo trata de estimar un clasificador que pueda separar los datos con el máximo margen, para que nuevos datos que puedan oscilar entre los de la muestra se aproximen bien de igual forma.
 
-Trataremos de ajustar los parámetros para encontrar el mejor valor para cada uno y dar así con un modelo mejor.
+Para estimar el mejor valor para un parámetro podemos utilizar la función tune. Esta función toma una serie de parámetros con los que experimentar y un rango y un salto para cada uno de ellos. La idea es que se estime el valor de cada parámetro que hace que el error en un 10-fold-cross-validation sea menor. Para ello esta función recibe un modelo, las características con las que predecir la variable respuesta, el conjunto de datos y la lista de parámetros a estimar.
+
+Tal y como se nos indica en el enunciado, nosotros trataremos de estimar el valor del parámetro libre gamma. Como se nos pide una precisión de dos cifras, solicitamos a la función que pruebe todos los valores entre 0 y 1 con un salto de 0.01.
 
 ```{r}
-tune_gamma_svm = tune(svm, MEDV ~ ., data=housing_train, ranges = list(gamma=seq(0,1,0.01)), cost = 2^(2:9))
+tune_gamma_svm = tune(svm, MEDV ~ ., data=housing_train,
+                      ranges = list(gamma=seq(0,1,0.01)))
+
 tune_gamma_svm
 ```
 
+Tras la ejecución de la función obtenemos que 0.09 es el mejor valor para gamma que ha encontrado. A continuación procederemos a realizar un estudio con cross-validation sobre el conjunto completo de datos utilizando este parámetro. Definimos una nueva función similar a la de las redes neuronales.
+
+El proceso de partición del conjunto de datos es igual al anterior. Ahora para cada par train-test entrenaremos el modelo con el conjunto de train con el parámetro gamma tomando el valor anteriormente calculado. Utilizamos el núcleo gaussiano pasándole el parámetro "radial" como kernel. El error nuevamente es el error medio cuadrático.
+
 ```{r}
-svm_housing = svm(MEDV ~ ., data=housing_train, kernel="radial", gamma=0.09)
+crossValidationSVM = function(datos){
+  set.seed(6)
+  #realizamos 5 particiones:
+  folds = suppressWarnings(split(datos, sample(rep(1:5, nrow(datos)/5))))
+  errores = as.numeric()
+  for (i in 1:5){
+    test_ = folds[[i]]
+    train_ = data.frame()
+    for (j in 1:5){
+      if(j!=i)
+        train_ = rbind(train_, folds[[j]])
+    }
 
-pred_svm = predict(svm_housing, housing_test)
+    svm_housing = svm(MEDV ~ ., data=train_, kernel="radial", gamma=0.09)
+    pred_svm = predict(svm_housing, test_)
+    error = mse(test_$MEDV, pred_svm)
 
-mse(housing_test$MEDV, pred_svm)
+    errores = c(errores, error)
+  }
+
+  mean(errores)
+}
+
+crossValidationSVM(datos_housing)
 ```
+
+Como podemos observar, el error que nos da SVM está por encima de los otros dos que hemos generado hasta el momento, el del modelo lineal y el de la red neuronal. SVM es un algoritmo que funciona principalmente bien en problemas de clasificación binaria, ya que su comportamiento tratando de dejar el mayor margen entre los datos y el clasificador proporciona unas zonas muy óptimas a la hora de tratar nuevos datos.
+
+Sin embargo, en un problema de regresión como el que nos atañe esa particularidad tiende a reflejar un error mayor, pues la distancia entre los datos y el clasificador es justo lo que tratamos de optimizar. Por este motivo consideramos entendible que un modelo como SVM refleje malos resultados en este tipo de problema.
 
 ###BOOSTING
 
@@ -367,13 +401,19 @@ Para llevar a cabo cada una de las experimentaciones con los modelos, utilizarem
 
 El número de conjuntos generados con Bootstrap será indicado en el objeto bootstrap_control, generado mediante la función trainControl y a la que le pasamos el número de conjuntos a ser empleados. La técnica con la que se seleccionarán estos conjuntos se especificará a continuación en la función train, del paquete "caret".
 
-En la llamada a esta función se pueden especificar multitud de parámetros, pero los que nostros vamos a especificar son los datos y la variable respuesta, lógicamente, y además el tipo de modelo a entrenar (gbm = Boosting), el número de conjuntos a generar por Bootstrapping (con nuestro objeto bootstrap_control), indicando el método especificando que la variable bag.fraction sea 1 (cada uno de los conjuntos se generan de igual tamaño al conjunto de datos, con reemplazamiento), y por último, la rejilla que contiene los parámetros a estimar, que es el grid que hemos creado anteriormente.
+En la llamada a esta función se pueden especificar multitud de parámetros, pero los que nostros vamos a especificar son los datos y la variable respuesta, lógicamente, y además el tipo de modelo a entrenar (gbm = Boosting), el número de conjuntos a generar por Bootstrapping (con nuestro objeto bootstrap_control), indicando el método especificando que la variable bag.fraction sea 1 (cada uno de los conjuntos se generan de igual tamaño al conjunto de datos, con reemplazamiento), y por último, la rejilla que contiene los parámetros a estimar, que es el grid que hemos creado anteriormente. [2]
+
+
 
 ```{r}
 grid_gbm = expand.grid(.interaction.depth = (1:5)*2, .n.trees = (1:10)*50, .shrinkage = 0.1, .n.minobsinnode=10)
 
 bootstrap_control = trainControl(number = 200)
-gbm_housing = train(housing_train[,1:13], housing_train[,14], method="gbm", trControl = bootstrap_control, verbose=F, bag.fraction = 1, tuneGrid = grid_gbm)
+gbm_housing = train(housing_train[,1:13], housing_train[,14],
+                    method="gbm", trControl = bootstrap_control,
+                    verbose=F, bag.fraction = 1,
+                    tuneGrid = grid_gbm)
+
 gbm_housing$bestTune
 ```
 
@@ -383,12 +423,17 @@ Ahora procedamos a validar dicho modelo empleando 5fold cross-validation con los
 
 ```{r}
 set.seed(7)
-boosting_housing = gbm(MEDV ~ ., data = housing_train, n.trees = 250, interaction.depth = 6, shrinkage = 0.1, n.minobsinnode = 10, cv.folds = 5)
+boosting_housing = gbm(MEDV ~ ., data = housing_train,
+                       n.trees = 350, interaction.depth = 4,
+                       shrinkage = 0.1, n.minobsinnode = 10,
+                       cv.folds = 5)
 
-pred_boosting = predict(boosting_housing, housing_test, n.trees = 250, interaction.depth = 6, shrinkage = 0.1, n.minobsinnode = 10)
+pred_boosting = predict(boosting_housing, housing_test,
+                        n.trees = 350, interaction.depth = 4,
+                        shrinkage = 0.1,
+                        n.minobsinnode = 10)
 
 mse(housing_test$MEDV, pred_boosting)
-
 ```
 
 El error que hemos obtenido habiendo optimizado los parámetros es el mejor que hemos encontrado hasta ahora, recompensando el trabajo invertido en encontrar aquellos valores que parecían minimizar el error en nuestro experimento previo.
@@ -408,7 +453,7 @@ En primer lugar, como se indica en la práctica, debemos valorar el número de �
 ```{r}
 set.seed(6)
 tune_rf = tune(randomForest, MEDV ~ ., data=housing_train,
-               ranges = list(ntree=seq(25,500,25)), cost = 2^(2:9))
+               ranges = list(ntree=seq(25,500,25)))
 
 tune_rf
 ```
@@ -449,5 +494,16 @@ Con esto, en resumen, podemos entender que este algoritmo no nos dé la mejor so
 
 ###Conclusión y modelo final seleccionado
 
-ESTO SE UTILIZARÁ EN LA CONCLUSIÓN FINAL
-Y seguramente será uno de los principales algoritmos a tener en cuenta cuando contamos con una base de datos sin muchas muestras porque nos favorece el remuestreo con reemplazamiento.
+Una vez planteados todos los modelos, habiendo realizado una validación cruzada para estimar un valor de error significativo para cada uno, y habiendo sido comparados, \textbf{Boosting} ha sido el que ha reflejado un menor error.
+
+Debido a la forma de trabajar de Boosting, utilizando clasificadores simples para obtener un clasificador global que utilice secciones de cada uno, el clasificador obtenido fue muy bueno. Además es mucho más eficiente que otros modelos como las redes neuronales que se aprovechan más de la alta cantidad de características. Partiendo de "sólo" 14 como tenemos en este problema, y con además pocas muestras, no cualquier modelo funciona igual de bien.
+
+Y justo eso es uno de los principales motivos por el que este algoritmo es uno de los más a tener en cuenta cuando contamos con una base de datos sin muchas muestras, porque nos favorece su planteamiento de remuestreo con reemplazamiento. El empleo del Bagging nos permite explotar bien los pocos datos de los que disponemos y así mediante Bootstrapping ser capaces de entrenar y validar distintos conjuntos que nos lleven a un buen ajuste.
+
+Concluimos recordando que, además, en este caso en particular se incidió en la optimización de dos parámetros visiblemente importantes, como son el número de árboles a generar por modelo y la profundidad de esos árboles. Habiendo podido explorar tanta variedad de modelos, el que obtengamos como el mejor podemos estar seguro de que será muy válido para nuestros datos. Y, experimentalmente, hemos podido demostrar que así es, siendo con un amplio margen el que obtiene el mejor ajuste.
+
+###Bibliografía
+
+[1] Fitting a Neural Network in R; neuralnet package, Datascience+, https://datascienceplus.com/fitting-neural-network-in-r/
+
+[2] Building Predictive Models in R Using the caret Package, Max Kuhn, Pfizer Global R&D, 2008.
