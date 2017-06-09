@@ -260,6 +260,12 @@ Comenzaremos abordando las redes neuronales.
 
 Para realizar modelos de redes neuronales utilizaremos el paquete "neuralnet", que nos aporta una función para el estudio de estos modelos.
 
+Para la estimación de los parámetros a obtener, tal como se especifica en el guión, emplearemos validación cruzada para estimar el $E_{out}$. En nuestro caso vamos a dividir nuestro conjunto de entrenamiento en 5 particinoes y en cada iteración validaremos con una habiendo entrenado con las 4 restantes. Esto se denomina 5-fold-cross-validation.
+
+Hemos diseñado una función que realiza los cálculos pertinentes para un conjunto de datos dado y una arquitectura de la red neuronal. El objetivo será llamar a la función con distintas arquitecturas con 1, 2 y 3 capas ocultas y con distintas unidades en cada una de ellas, y finalmente encontrar cuál ofrece un error más reducido. Los pesos se inicializarán a valores aleatorios siguiendo una distribución normal si no se especifica un vector inicial.
+
+En primer lugar, para que la red neuronal tenga éxito, escalaremos y centraremos los datos independientemente de las transformaciones realizadas anteriormente. El objetivo es normalizar los valores, incluyendo la variable respuesta en este caso. Con estos datos podremos construir nuestra red neuronal, pero a continuación será necesario "desnormalizar" los valores obtenidos para que el error sea comparable al resto de errores obtenidos en la práctica. [1]
+
 ```{r}
 crossValidationNN = function(datos, capas){
   maxs = apply(datos, 2, max)
@@ -267,7 +273,7 @@ crossValidationNN = function(datos, capas){
   datos = as.data.frame(scale(datos, center = mins, scale = maxs - mins))
   set.seed(6)
   #realizamos 5 particiones:
-  folds = split(datos, sample(rep(1:5, nrow(datos)/5)))
+  folds = suppressWarnings(split(datos, sample(rep(1:5, nrow(datos)/5))))
   errores = as.numeric()
   for (i in 1:5){
     test_ = folds[[i]]
@@ -277,22 +283,15 @@ crossValidationNN = function(datos, capas){
         train_ = rbind(train_, folds[[j]])
     }
 
-
     n = names(train_)
     f = as.formula(paste("MEDV ~", paste(n[!n %in% "MEDV"], collapse = " + ")))
     nn = neuralnet(f,data=train_,hidden=capas,linear.output=T)
-
-
-
     pr.nn = compute(nn,test_[,1:13])
-
     pr.nn_ = pr.nn$net.result*(max(datos_housing$MEDV)-min(datos_housing$MEDV))+min(datos_housing$MEDV)
     test.r = (test_$MEDV)*(max(datos_housing$MEDV)-min(datos_housing$MEDV))+min(datos_housing$MEDV)
-
     MSE.nn = sum((test.r - pr.nn_)^2)/nrow(test_)
 
     errores = c(errores, MSE.nn)
-
   }
 
   mean(errores)
@@ -312,6 +311,14 @@ eout_nn_3_742=crossValidationNN(datos_housing,c(7,4,2))
 eout_nn_3_742
 ```
 
+Hemos realizado pruebas con 6 arquitecturas, 2 con 1 capa interna, 2 con 2 y otras 2 con 3. Las unidades por capa han sido elegidos arbitrariamente, ya que el objetivo en este caso es comparar redes neuronales, y a base de cross-validation y pruebas con distintos valores encontrar qué arquitectura con qué número de unidades por capa parece ser la mejor.
+
+En nuestro caso, vemos que el menor error viene obtenido con la última de las redes, la que tiene 3 capas con 7, 4 y 2 unidades por capa respectivamente. Sin embargo, también hay una arquitectura de 2 capas que ofrece un error un poco por encima, pero que también podemos considerar aceptable. Siguiendo el criterio de la navaja de Ockham, para dos soluciones prácticamente iguales, la mejor solución es aquella que resuelve el problema de forma más simple.
+
+Por tanto, podríamos quedarnos con cualquiera de las dos redes, ya que consideramos que ambas pueden considerarse una buena solución en término medio de eficiencia/error.
+
+Por último, ofrecemos una gráfica de cómo se ha generado la mejor red neuronal y qué valores toman los pesos y el sesgo en cada una de las capas para un caso puntual.
+
 ```{r}
 maxs = apply(datos_housing, 2, max)
 mins = apply(datos_housing, 2, min)
@@ -324,7 +331,6 @@ plot(nn_winner)
 ```
 
 ####SUPPORT VECTOR MACHINE
-
 
 Trataremos de ajustar los parámetros para encontrar el mejor valor para cada uno y dar así con un modelo mejor.
 
