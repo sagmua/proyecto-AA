@@ -1,5 +1,5 @@
 ---
-title: "Trabajo 3"
+title: "Proyecto Final AA"
 author: "Samuel Cardenete Rodríguez y Juan José Sierra González"
 date: "2 de junio de 2017"
 output:
@@ -22,6 +22,7 @@ library("ModelMetrics")
 library("neuralnet")
 library("e1071")
 library("gbm")
+library("plyr")
 library("randomForest")
 
 ```
@@ -244,12 +245,21 @@ etest_m6
 Con este modelo lineal con transformaciones no lineales hemos alcanzado un error de 11.108, mejor que los anteriores. Por tanto, nos quedamos con este modelo como el mejor lineal. ¿Es este mejor que un modelo no lineal? A continuación probaremos distintos modelos no lineales y compararemos los resultados para ver cuál ajusta mejor.
 
 
-###MODELOS NO LINEALES:
+##MODELOS NO LINEALES:
 
-Comenzamos a aplicar modelos:
+Definiremos cuatro modelos no lineales con los que comparar el mejor modelo lineal que hemos encontrado y poder realizar una valoración objetiva de cuál ofrece mejores resultados para nuestra base de datos. Los modelos a estudiar serán:
 
-Para ello aplicamos validación cruzada generando redes neuronales de forma que estimemos así que parámetros producen un mejor error. Validación cruazada con 10 fold:
-####REDES NEURONALES:
+* \textbf{Redes Neuronales}
+* \textbf{Support Vector Machine}
+* \textbf{Boosting}
+* \textbf{Random Forest}
+
+###REDES NEURONALES:
+
+Comenzaremos abordando las redes neuronales.
+
+Para realizar modelos de redes neuronales utilizaremos el paquete "neuralnet", que nos aporta una función para el estudio de estos modelos.
+
 ```{r}
 crossValidationNN = function(datos, capas){
   maxs = apply(datos, 2, max)
@@ -324,31 +334,62 @@ tune_gamma_svm
 ```
 
 ```{r}
-svm_housing = svm(MEDV ~ ., data=housing_train, kernel="radial", gamma=0.08)
+svm_housing = svm(MEDV ~ ., data=housing_train, kernel="radial", gamma=0.09)
 
 pred_svm = predict(svm_housing, housing_test)
 
 mse(housing_test$MEDV, pred_svm)
 ```
 
-####BOOSTING
+###BOOSTING
+
+A continuación pasamos a valorar el modelo de Boosting. Como hemos aprendido, Boosting es un método muy potente que basa su clasificador final en una serie de clasificadores simples previos. El final será una combinación de los anteriores que separe de forma correcta o próxima los datos.
+
+Antes de generar el modelo, vamos a realizar una estimación (tuning) de los parámetros más interesantes a nuestro parecer para Boosting. Estos son:
+
+* \textbf{n.trees}: el número de árbol generados, el cual estimaremos entre 50 y 500.
+* \textbf{interaction.depth}: la profundidad de cada árbol, es decir, su complejidad. La estimamos entre 2 y 10.
+* \textbf{shrinkage}: la tasa de aprendizaje, la cual vamos a estimar entre 0.01 y 0.1, que son dos valores de tasa de aprendizaje que hemos utilizado en prácticas anteriores, para ver cuál se ajusta más a nuestro problema.
+
+Vamos a realizar una rejilla de valores que deben tomar los distintos parámetros para cada una de las ejecuciones, de forma que se pueda estimar la mejor. La construiremos utilizando la función expand.grid, añadiendo como columnas los nombres de los atributos y como filas las combinaciones de valores a tomar. Además, hemos tenido que añadir una columna con los valores de n.minobsinnode porque lo requería la función. En este caso vamos a dejarle el valor que toma por defecto según la documentación de gbm, que es 10.
+
+Nuestra rejilla tendrá entonces 50 combinaciones, aquellas posibles entre los 10 valores diferentes que tomará n.trees y los 5 que tomará interaction.depth.
+
+Para llevar a cabo cada una de las experimentaciones con los modelos, utilizaremos la técnica de Bagging, generando conjuntos mediante Bootstrap con los que poder validar cada modelo un número considerable de veces y obtener un valor de error significativo que nos permita determinar con certeza el valor idóneo de los parámetros (aquellos valores que presenta el mejor modelo generado).
+
+El número de conjuntos generados con Bootstrap será indicado en el objeto bootstrap_control, generado mediante la función trainControl y a la que le pasamos el número de conjuntos a ser empleados. La técnica con la que se seleccionarán estos conjuntos se especificará a continuación en la función train, del paquete "caret".
+
+En la llamada a esta función se pueden especificar multitud de parámetros, pero los que nostros vamos a especificar son los datos y la variable respuesta, lógicamente, y además el tipo de modelo a entrenar (gbm = Boosting), el número de conjuntos a generar por Bootstrapping (con nuestro objeto bootstrap_control), indicando el método especificando que la variable bag.fraction sea 1 (cada uno de los conjuntos se generan de igual tamaño al conjunto de datos, con reemplazamiento), y por último, la rejilla que contiene los parámetros a estimar, que es el grid que hemos creado anteriormente.
 
 ```{r}
-grid_gbm = expand.grid(.interaction.depth = (1:5)*2, .n.trees = (1:10)*25, .shrinkage = .1, .n.minobsinnode = .1)
+grid_gbm = expand.grid(.interaction.depth = (1:5)*2, .n.trees = (1:10)*50, .shrinkage = 0.1, .n.minobsinnode=10)
 
-bootControl = trainControl(number = 200)
-gmb_housing = train(housing_train[,1:13], housing_train[,14], method="gbm", trControl = bootControl, verbose=F, bag.fraction = 1, tuneGrid = grid_gbm)
+bootstrap_control = trainControl(number = 200)
+gbm_housing = train(housing_train[,1:13], housing_train[,14], method="gbm", trControl = bootstrap_control, verbose=F, bag.fraction = 1, tuneGrid = grid_gbm)
+gbm_housing$bestTune
 ```
+
+Una vez hemos terminado de estimar los parámetros, podemos acceder a la mejor combinación utilizando la componente bestTune del objeto construido. Vemos que nuestra mejor estimación supone utilizar 350 árboles con una profundidad de 4.
+
+Ahora procedamos a validar dicho modelo empleando 5fold cross-validation con los parámetros obtenidos. Analizaremos el error medio cuadrático obtenido ($E_{out}$) como siempre con la función mse.
 
 ```{r}
 set.seed(7)
-boosting_housing = gbm(MEDV ~ ., data = housing_train, n.trees = 200, interaction.depth = 6, shrinkage = 0.1, n.minobsinnode = 0.1)
+boosting_housing = gbm(MEDV ~ ., data = housing_train, n.trees = 250, interaction.depth = 6, shrinkage = 0.1, n.minobsinnode = 10, cv.folds = 5)
 
-pred_boosting = predict(boosting_housing, housing_test, n.trees = 200, interaction.depth = 6, shrinkage = 0.1, n.minobsinnode = 0.1)
+pred_boosting = predict(boosting_housing, housing_test, n.trees = 250, interaction.depth = 6, shrinkage = 0.1, n.minobsinnode = 10)
 
 mse(housing_test$MEDV, pred_boosting)
 
 ```
+
+El error que hemos obtenido habiendo optimizado los parámetros es el mejor que hemos encontrado hasta ahora, recompensando el trabajo invertido en encontrar aquellos valores que parecían minimizar el error en nuestro experimento previo.
+
+El clasificador obtenido resulta de una combinación de clasificadores simples, que van clasificando los datos en función de unos pesos. Estos pesos se inicializan a un valor equitativo y se van modificando en función de si cómo de bien ha sido determinada su variable respuesta. Si un dato ha obtenido una mala valoración de su variable respuesta una gran cantidad de veces, su peso se incrementará para priorizar que se aproxime bien en próximas iteraciones. Del mismo modo, un dato bien aproximado con asiduidad verá su peso reducido para no ser tan tenido en cuenta a la hora de generar nuevos clasificadores.
+
+El resultado es que se consigue que todos o la mayoría de los datos estén bien aproximados por algún clasificador simple y se construye un clasificador complejo que utiliza distintas secciones de los clasificadores previos. En un conjunto de datos como el nuestro se ha comprobado experimentalmente que los datos se acercan al clasificador bastante más que en otros modelos.
+
+###RANDOM FOREST
 
 ```{r}
 m = ncol(housing_train)/3
@@ -365,11 +406,6 @@ rf_housing = randomForest(MEDV ~ ., housing_train, ntree=200, mtry=m)
 calculoMSE(rf_housing, housing_test, "MEDV")
 print(rf_housing)
 plot(rf_housing)
-```
-
-```{r}
-head(housing_test$MEDV)
-head(prob_rf)
 ```
 
 El error no es malo pero sigue siendo un peor modelo que el mejor que hemos generado ahora mismo. Hemos comprobado también que es contraproducente realizar transformaciones con logaritmos y raíces debido a la cantidad de datos negativos que tiene la base de datos una vez normalizada.
