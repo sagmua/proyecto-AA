@@ -330,7 +330,9 @@ nn_winner = neuralnet(f,data=housing_train_esc,hidden=c(7,4,2),linear.output=T)
 plot(nn_winner)
 ```
 
-####SUPPORT VECTOR MACHINE
+###SUPPORT VECTOR MACHINE
+
+El siguiente modelo a tratar será SVM (Support Vector Machine). Este modelo trata de estimar un clasificador que pueda separar los datos con el máximo margen, para que nuevos datos puedan ser
 
 Trataremos de ajustar los parámetros para encontrar el mejor valor para cada uno y dar así con un modelo mejor.
 
@@ -397,58 +399,55 @@ El resultado es que se consigue que todos o la mayoría de los datos estén bien
 
 ###RANDOM FOREST
 
-```{r}
-m = ncol(housing_train)/3
-set.seed(6)
-rf_housing = randomForest(MEDV ~ ., housing_train, ntree=500, mtry=m)
-print(rf_housing)
-plot(rf_housing)
-```
+El último modelo no lineal a comparar será Random Forest. Este modelo funciona de forma similar a Bagging, pero con una serie de árboles no correlados al no utilizar para cada caso todos los predictores posibles. En particular, para problemas de regresión, en la documentación del paquete randomForest se puede encontrar que el valor ideal de 'm' (las variables para ramificaciones) es p/3, siendo p el número total de predictores.
+
+Es un algoritmo que funciona de forma muy eficiente gracias a generar árboles con menos predictores, y por tanto menor profundidad. En el caso de los árboles, su complejidad es cuadrática por lo que a mayor número de predictores, el tiempo de cómputo crece exponencialmente. Es decir, es mucho más eficiente resolver muchos árboles pequeños que unos pocos grandes.
+
+En primer lugar, como se indica en la práctica, debemos valorar el número de árboles a generar que ofrece un mejor resultado experimentalmente. Para ello utilizaremos de nuevo la función tune, cuyo objetivo será repetir el modelo Random Forest para todos los valores entre 25 y 500, en saltos de 25. Dado que Random Forest es un modelo que reduce el error muy rápidamente con los primeros árboles como hemos visto en teoría no hemos querido probar con valores más altos. 
 
 ```{r}
-m = ncol(housing_train)/3
 set.seed(6)
-rf_housing = randomForest(MEDV ~ ., housing_train, ntree=200, mtry=m)
-calculoMSE(rf_housing, housing_test, "MEDV")
-print(rf_housing)
-plot(rf_housing)
+tune_rf = tune(randomForest, MEDV ~ ., data=housing_train,
+               ranges = list(ntree=seq(25,500,25)), cost = 2^(2:9))
+
+tune_rf
 ```
 
-El error no es malo pero sigue siendo un peor modelo que el mejor que hemos generado ahora mismo. Hemos comprobado también que es contraproducente realizar transformaciones con logaritmos y raíces debido a la cantidad de datos negativos que tiene la base de datos una vez normalizada.
+Esta ejecución nos refleja que el mejor valor indicado para el número de árboles es 50, habiendo realizado la cross-validation con nuestro conjunto de train. Ahora, procederemos a validar este modelo construyendo una función similar a la que utilizamos en redes neuronales que realice nuestra propia cross-validation sobre el conjunto completo de los datos. Este error, medido de nuevo con mse, nos reflejará un valor significativo.
 
-En resumen, tras realizar distintas combinaciones de atributos y tratar de predecir con ellos, utilizando alguna transformación no lineal, experimentalmente hemos reducido el error fuera de la muestra a un 0.239. Este error se ha obtenido con un modelo con transformación cuadrática sobre el atributo 'age' (el que mejor representa la muestra como hemos visto en regSubsets) y utilizando los 4 siguientes mejores atributos.
+```{r}
+crossValidationRF = function(datos){
+  set.seed(6)
+  #realizamos 5 particiones:
+  folds = suppressWarnings(split(datos, sample(rep(1:5, nrow(datos)/5))))
+  errores = as.numeric()
+  m = ncol(housing_train)/3
+  for (i in 1:5){
+    test_ = folds[[i]]
+    train_ = data.frame()
+    for (j in 1:5){
+      if(j!=i)
+        train_ = rbind(train_, folds[[j]])
+    }
 
-###Estimacion del error $E_{out}$
-Una vez que hemos comprobado qué modelo nos aporta un mejor resultado, vamos a proceder a realizar una estimación del $E_{out}$ de forma que obtengamos un valor más representativo que un error puntual en un par de conjuntos train-test.
+    rf_housing = randomForest(MEDV ~ ., train_, ntree=50, mtry=m)
+    error = calculoMSE(rf_housing, test_, "MEDV")
 
-Para ello vamos a realizar un experimento repitiendo el proceso completo, desde la generación de particiones, tanto train como test, con la misma proporción realizada anteriormente (0.8 para train y 0.2 para test), hasta la definición de los modelos y cálculo del $E_{test}$. Repetiremos el proceso 100 veces y obtendremos la media de los $E_{test}$, considerándolo una buena estimación del $E_{out}$ para el modelo.
+    errores = c(errores, error)
+  }
 
-Definamos una función que realice tanto la generación y el particionado, así como las transformaciones sobre los conjuntos de datos y que devuelva el error generado por el mejor modelo obtenido:
-
-```{r generaErrorParticionhousing}
-generarErrorParticionhousing = function(datos){
-  #Si queremos obtener un conjunto de indices train para luego ejecutar un modelo lineal sobre el train:
-  indices_train = sample (nrow(datos), round(nrow(datos)*0.7))
-  #definimos ambos conjuntos en dos data.frame diferentes:
-  housing_train = datos[indices_train,]
-  housing_test = datos[-indices_train,]
-
-  #TRANSFORMACIONES:
-  housingTrans = preProcess(housing_train[,-which(names(datos_housing) == "MEDV")], method = c("BoxCox", "center", "scale"),thresh = 0.8)
-housing_train[,-which(names(housing_train) == "MEDV")] =predict(housingTrans,housing_train[,-which(names(housing_train) == "MEDV")])
-housing_test[,-which(names(housing_test) == "MEDV")] =predict(housingTrans,housing_test[,-which(names(housing_test) == "MEDV")])
-
-#EVALUACION DEL MODELO
-modelo_housing = lm(MEDV ~ LSTAT* RM* PTRATIO * DIS, data=housing_train)
-
-etest = calculoMSE(modelo_housing, housing_test, "MEDV")
-etest
+  mean(errores)
 }
 
-mean(replicate(100, generarErrorParticionhousing(datos_housing)))
+eout_rf = crossValidationRF(datos_housing)
+eout_rf
 ```
 
-Como podemos ver, obtenemos una estimación del $E_{out}$ de 0.286. Este error representa mejor el error real obtenido por nuestro modelo de regresión lineal, aunque sea peor que el error puntual que teníamos antes. Seguramente esto se deba a que para los conjuntos train y test definidos anteriormente el modelo se ajustaba particularmente bien, mientras que de forma general en el problema ese modelo no llega a ser tan bueno.
+Podemos comprobar que el error que nos presenta este modelo de Random Forest es el segundo mejor que hemos tenido hasta ahora, y en un tiempo escaso dado a la eficiencia del algoritmo. Como hemos indicado antes, Random Forest utiliza únicamente una fracción de los predictores en cada árbol, por lo que es posible que haya predictores buenos que se utilicen poco o no se utilicen, y desde luego el árbol final no tiene por qué seleccionar los predictores de forma óptima dado que los árboles a partir de los cuáles se genera no tienen por qué serlo.
 
+Con esto, en resumen, podemos entender que este algoritmo no nos dé la mejor solución pero sí una muy buena en relación eficiencia/error. Y seguramente será uno de los principales algoritmos a tener en cuenta cuando contamos con una base de datos sin muchos predictores ya que es menos probable que se quede un número importante sin utilizar o sin dar el máximo que ofrecen.
 
 ###Conclusión y modelo final seleccionado
+
+ESTO SE UTILIZARÁ EN LA CONCLUSIÓN FINAL
+Y seguramente será uno de los principales algoritmos a tener en cuenta cuando contamos con una base de datos sin muchas muestras porque nos favorece el remuestreo con reemplazamiento.
